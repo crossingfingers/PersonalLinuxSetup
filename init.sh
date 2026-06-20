@@ -9,6 +9,8 @@
 #   - xclip
 #   - zsh
 #   - oh-my-zsh with the "cyber" theme
+#   - Go (latest stable, via official tarball)
+#   - Claude Code (official native installer)
 #
 # Supports Debian/Ubuntu (apt), Fedora/RHEL (dnf), and Arch (pacman).
 # Run with: bash setup.sh
@@ -315,6 +317,149 @@ else
     mark_fail "set zsh as default shell (zsh binary not found)"
 fi
 
+# ---------- install Go (latest stable, via official tarball) ----------
+#
+# Distro package managers often lag behind upstream Go releases, so this
+# downloads the current stable tarball directly from go.dev, same philosophy
+# as "latest python" above. Falls back gracefully if curl/tar are missing or
+# the download fails — never aborts the rest of the script.
+
+install_go() {
+    local label="Go (golang)"
+    log "Installing: $label"
+
+    if ! command -v curl >/dev/null 2>&1; then
+        mark_fail "$label (curl unavailable)"
+        return
+    fi
+
+    # Detect architecture
+    local arch
+    case "$(uname -m)" in
+        x86_64|amd64)   arch="amd64" ;;
+        aarch64|arm64)  arch="arm64" ;;
+        armv6l)         arch="armv6l" ;;
+        armv7l)         arch="armv6l" ;;
+        i386|i686)      arch="386" ;;
+        *)
+            mark_fail "$label (unsupported architecture: $(uname -m))"
+            return
+            ;;
+    esac
+
+    # Detect latest version from go.dev
+    local go_version
+    go_version="$(curl -sL https://go.dev/VERSION?m=text 2>/dev/null | head -n1)"
+    if [ -z "$go_version" ]; then
+        mark_fail "$label (could not detect latest version from go.dev)"
+        return
+    fi
+
+    local tarball="${go_version}.linux-${arch}.tar.gz"
+    local tmp_path="/tmp/${tarball}"
+    local download_url="https://go.dev/dl/${tarball}"
+
+    log "Downloading ${download_url}..."
+    if ! curl -fsSL "$download_url" -o "$tmp_path"; then
+        mark_fail "$label (download failed for $download_url)"
+        return
+    fi
+
+    log "Extracting Go to /usr/local/go..."
+    if ! sudo rm -rf /usr/local/go; then
+        mark_fail "$label (could not remove existing /usr/local/go)"
+        rm -f "$tmp_path"
+        return
+    fi
+
+    if ! sudo tar -C /usr/local -xzf "$tmp_path"; then
+        mark_fail "$label (tarball extraction failed)"
+        rm -f "$tmp_path"
+        return
+    fi
+
+    rm -f "$tmp_path"
+
+    # Add Go to PATH for future shell sessions (bash + zsh), idempotently
+    local go_path_line='export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin'
+    local profile_file
+    for profile_file in "${HOME}/.bashrc" "${HOME}/.zshrc"; do
+        if [ -f "$profile_file" ]; then
+            if ! grep -qF '/usr/local/go/bin' "$profile_file" 2>/dev/null; then
+                {
+                    echo ''
+                    echo '# Go (golang)'
+                    echo "$go_path_line"
+                } >> "$profile_file"
+            fi
+        else
+            {
+                echo "$go_path_line"
+            } >> "$profile_file"
+        fi
+    done
+
+    # Verify using the freshly extracted binary directly (PATH won't be
+    # updated in this running shell until a new session starts)
+    if /usr/local/go/bin/go version >/dev/null 2>&1; then
+        mark_ok "$label ($(/usr/local/go/bin/go version 2>&1))"
+    else
+        mark_fail "$label (binary did not run after extraction)"
+    fi
+}
+
+install_go
+
+# ---------- install Claude Code ----------
+#
+# Uses Anthropic's official native installer (no Node.js dependency,
+# auto-updates in background). Falls back to npm if curl-based install fails
+# and npm/Node.js happen to be available, but does not install Node.js itself
+# since that's outside this script's scope.
+
+install_claude_code() {
+    local label="Claude Code"
+
+    if command -v claude >/dev/null 2>&1; then
+        mark_skip "$label" "already installed ($(claude --version 2>&1 | head -n1))"
+        return
+    fi
+
+    if ! command -v curl >/dev/null 2>&1; then
+        mark_fail "$label (curl unavailable)"
+        return
+    fi
+
+    log "Installing: $label (native installer)"
+    if curl -fsSL https://claude.ai/install.sh | bash; then
+        # The installer places the binary under ~/.local/bin or similar and
+        # updates shell rc files itself, but PATH won't refresh in this
+        # running shell. Try common locations to confirm install succeeded.
+        if command -v claude >/dev/null 2>&1 || [ -x "${HOME}/.local/bin/claude" ]; then
+            mark_ok "$label"
+        else
+            mark_ok "$label (installed — open a new shell session for 'claude' to be on PATH)"
+        fi
+        return
+    fi
+
+    mark_fail "$label (native installer failed)"
+
+    # Fallback: try npm if it's already present on the system
+    if command -v npm >/dev/null 2>&1; then
+        warn "Attempting npm fallback install for Claude Code..."
+        if npm install -g @anthropic-ai/claude-code; then
+            mark_ok "$label (npm fallback)"
+        else
+            mark_fail "$label (npm fallback)"
+        fi
+    else
+        warn "npm not available for fallback install. Install Node.js 18+ and run: npm install -g @anthropic-ai/claude-code"
+    fi
+}
+
+install_claude_code
+
 # ---------- final status report ----------
 
 echo
@@ -352,9 +497,25 @@ echo "  fzf     : $(fzf --version 2>&1 || echo 'not found')"
 echo "  zsh     : $(zsh --version 2>&1 || echo 'not found')"
 echo "  xclip   : $(xclip -version 2>&1 | head -n1 || echo 'not found')"
 
+if [ -x /usr/local/go/bin/go ]; then
+    echo "  go      : $(/usr/local/go/bin/go version 2>&1)"
+elif command -v go >/dev/null 2>&1; then
+    echo "  go      : $(go version 2>&1)"
+else
+    echo "  go      : not found"
+fi
+
+if command -v claude >/dev/null 2>&1; then
+    echo "  claude  : $(claude --version 2>&1 | head -n1)"
+elif [ -x "${HOME}/.local/bin/claude" ]; then
+    echo "  claude  : installed (open a new shell session to use 'claude')"
+else
+    echo "  claude  : not found"
+fi
+
 echo
 if [ "${#STATUS_FAIL[@]}" -eq 0 ]; then
-    log "All steps completed successfully. Start a new terminal session or run 'zsh' to use your new shell with the cyber theme."
+    log "All steps completed successfully. Start a new terminal session (or run 'source ~/.zshrc') to pick up zsh, Go, and Claude Code on your PATH."
     exit 0
 else
     warn "Some steps failed — see the report above. Re-run this script after addressing them, or fix manually."
