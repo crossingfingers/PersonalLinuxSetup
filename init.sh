@@ -8,7 +8,7 @@
 #   - fzf
 #   - xclip
 #   - zsh
-#   - oh-my-zsh with the "cyber" theme
+#   - oh-my-zsh with the "crunch" theme
 #   - Go (latest stable, via official tarball)
 #   - Claude Code (official native installer)
 #
@@ -207,22 +207,22 @@ else
     fi
 fi
 
-# ---------- install cyber theme ----------
+# ---------- install crunch theme ----------
 #
-# "cyber" is not a built-in oh-my-zsh theme, so this generates a cyberpunk-style
+# "crunch" is not a built-in oh-my-zsh theme, so this generates a crunchpunk-style
 # custom theme and drops it into the custom themes directory. If oh-my-zsh
 # itself failed to install above, this step will still try (it only needs the
 # directory structure), but it's tracked independently either way.
 
 CUSTOM_THEMES_DIR="${OMZ_DIR}/custom/themes"
-THEME_FILE="${CUSTOM_THEMES_DIR}/cyber.zsh-theme"
+THEME_FILE="${CUSTOM_THEMES_DIR}/crunch.zsh-theme"
 
 if mkdir -p "$CUSTOM_THEMES_DIR" 2>/dev/null && [ -f "$THEME_FILE" ]; then
-    mark_skip "cyber theme install" "already exists at $THEME_FILE"
+    mark_skip "crunch theme install" "already exists at $THEME_FILE"
 elif mkdir -p "$CUSTOM_THEMES_DIR" 2>/dev/null; then
-    log "Installing 'cyber' theme..."
+    log "Installing 'crunch' theme..."
     if cat > "$THEME_FILE" << 'EOF'
-# cyber.zsh-theme — minimal cyberpunk-style prompt for oh-my-zsh
+# crunch.zsh-theme — minimal crunchpunk-style prompt for oh-my-zsh
 
 local ret_status="%(?:%{$fg_bold[green]%}➜:%{$fg_bold[red]%}➜)"
 
@@ -238,12 +238,12 @@ ZSH_THEME_GIT_PROMPT_DIRTY="%{$fg[blue]%}) %{$fg[yellow]%}✗"
 ZSH_THEME_GIT_PROMPT_CLEAN="%{$fg[blue]%})"
 EOF
     then
-        mark_ok "cyber theme install"
+        mark_ok "crunch theme install"
     else
-        mark_fail "cyber theme install"
+        mark_fail "crunch theme install"
     fi
 else
-    mark_fail "cyber theme install (could not create themes directory)"
+    mark_fail "crunch theme install (could not create themes directory)"
 fi
 
 # ---------- configure .zshrc ----------
@@ -251,15 +251,15 @@ fi
 ZSHRC="${HOME}/.zshrc"
 
 if [ -f "$ZSHRC" ]; then
-    log "Setting ZSH_THEME to 'cyber' in $ZSHRC..."
+    log "Setting ZSH_THEME to 'crunch' in $ZSHRC..."
     if grep -q '^ZSH_THEME=' "$ZSHRC"; then
-        if sed -i.bak 's/^ZSH_THEME=.*/ZSH_THEME="cyber"/' "$ZSHRC"; then
+        if sed -i.bak 's/^ZSH_THEME=.*/ZSH_THEME="crunch"/' "$ZSHRC"; then
             mark_ok ".zshrc theme configuration"
         else
             mark_fail ".zshrc theme configuration"
         fi
     else
-        if echo 'ZSH_THEME="cyber"' >> "$ZSHRC"; then
+        if echo 'ZSH_THEME="crunch"' >> "$ZSHRC"; then
             mark_ok ".zshrc theme configuration"
         else
             mark_fail ".zshrc theme configuration"
@@ -269,7 +269,7 @@ else
     warn "$ZSHRC not found, creating a minimal one."
     if cat > "$ZSHRC" << 'EOF'
 export ZSH="$HOME/.oh-my-zsh"
-ZSH_THEME="cyber"
+ZSH_THEME="crunch"
 plugins=(git)
 source $ZSH/oh-my-zsh.sh
 EOF
